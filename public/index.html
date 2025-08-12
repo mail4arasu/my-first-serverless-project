@@ -64,46 +64,65 @@
             const intervalRef = useRef(null);
             const [error, setError] = useState(null);
 
-            // Load environment variables (enhanced method)
+            // Enhanced environment variable loading for Netlify
             useEffect(() => {
-                // Method 1: Try window.ENV (Netlify build-time)
                 let envApiKey = '';
                 let envApiSecret = '';
+                let envAccessToken = '';
                 
-                try {
-                    envApiKey = window.ENV?.REACT_APP_KITE_API_KEY || '';
-                    envApiSecret = window.ENV?.REACT_APP_KITE_API_SECRET || '';
-                } catch (e) {
-                    console.log('window.ENV not available');
+                // Method 1: Try process.env (Netlify build time)
+                if (typeof process !== 'undefined' && process.env) {
+                    envApiKey = process.env.REACT_APP_KITE_API_KEY || '';
+                    envApiSecret = process.env.REACT_APP_KITE_API_SECRET || '';
+                    envAccessToken = process.env.REACT_APP_KITE_ACCESS_TOKEN || '';
                 }
                 
-                // Method 2: Try process.env (if available)
-                if (!envApiKey) {
-                    try {
-                        envApiKey = process?.env?.REACT_APP_KITE_API_KEY || '';
-                        envApiSecret = process?.env?.REACT_APP_KITE_API_SECRET || '';
-                    } catch (e) {
-                        console.log('process.env not available');
-                    }
+                // Method 2: Try window._env_ (Netlify runtime injection)
+                if (!envApiKey && typeof window !== 'undefined' && window._env_) {
+                    envApiKey = window._env_.REACT_APP_KITE_API_KEY || '';
+                    envApiSecret = window._env_.REACT_APP_KITE_API_SECRET || '';
+                    envAccessToken = window._env_.REACT_APP_KITE_ACCESS_TOKEN || '';
                 }
                 
-                // Method 3: Manual configuration fallback
+                // Method 3: Try window.ENV (alternative Netlify format)
+                if (!envApiKey && typeof window !== 'undefined' && window.ENV) {
+                    envApiKey = window.ENV.REACT_APP_KITE_API_KEY || '';
+                    envApiSecret = window.ENV.REACT_APP_KITE_API_SECRET || '';
+                    envAccessToken = window.ENV.REACT_APP_KITE_ACCESS_TOKEN || '';
+                }
+
+                // Method 4: Hardcode for testing (temporary)
                 if (!envApiKey) {
+                    // Use your actual values from Netlify env:list
+                    envApiKey = 'vyp8y4w3g7s87881';
+                    envApiSecret = 'pd5bol5wz7geyh1nq1omfubtv4z0ttv';
+                    envAccessToken = 'ZytHDbs591VDg4d3VBSluX5u5';
+                    
                     setDebugInfo(prev => [...prev, {
                         symbol: 'ENV',
                         status: 'WARNING',
-                        message: 'Environment variables not found - use manual config'
+                        message: 'Using hardcoded credentials - environment variables not accessible'
                     }]);
-                } else {
+                }
+                
+                if (envApiKey) {
                     setApiConfig(prev => ({
                         ...prev,
                         apiKey: envApiKey,
-                        apiSecret: envApiSecret
+                        apiSecret: envApiSecret,
+                        accessToken: envAccessToken
                     }));
+                    
                     setDebugInfo(prev => [...prev, {
                         symbol: 'ENV',
                         status: 'SUCCESS',
-                        message: `API Key loaded: ${envApiKey.substring(0, 8)}...`
+                        message: `Credentials loaded - API Key: ${envApiKey.substring(0, 8)}..., Secret: ${envApiSecret ? 'SET' : 'MISSING'}, Token: ${envAccessToken ? 'SET' : 'MISSING'}`
+                    }]);
+                } else {
+                    setDebugInfo(prev => [...prev, {
+                        symbol: 'ENV',
+                        status: 'ERROR',
+                        message: 'Environment variables not accessible - use manual config'
                     }]);
                 }
 
