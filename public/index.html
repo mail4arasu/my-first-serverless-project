@@ -147,7 +147,7 @@
                 }
             };
 
-            // Handle OAuth callback with real API call
+            // Handle OAuth callback with proper form encoding
             const handleOAuthCallback = async (requestToken) => {
                 try {
                     setDebugInfo(prev => [...prev, {
@@ -156,35 +156,50 @@
                         message: `Processing request token: ${requestToken.substring(0, 10)}...`
                     }]);
 
-                    // Call the actual Netlify function to generate access token
+                    // Debug: Log the credentials being used
+                    setDebugInfo(prev => [...prev, {
+                        symbol: 'OAUTH',
+                        status: 'INFO',
+                        message: `Using API Key: ${apiConfig.apiKey?.substring(0, 8)}..., Secret: ${apiConfig.apiSecret ? 'provided' : 'missing'}`
+                    }]);
+
+                    // Create proper form data
+                    const formBody = new URLSearchParams();
+                    formBody.append('request_token', requestToken);
+                    formBody.append('api_key', apiConfig.apiKey);
+                    formBody.append('api_secret', apiConfig.apiSecret);
+
+                    // Debug: Log what we're sending
+                    setDebugInfo(prev => [...prev, {
+                        symbol: 'OAUTH',
+                        status: 'INFO',
+                        message: `Sending form data: request_token=${requestToken.substring(0, 10)}..., api_key=${apiConfig.apiKey?.substring(0, 8)}...`
+                    }]);
+
                     const response = await fetch('/.netlify/functions/generate-access-token', {
                         method: 'POST',
                         headers: { 
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json'
+                            'Content-Type': 'application/x-www-form-urlencoded'
                         },
-                        body: JSON.stringify({
-                            request_token: requestToken,
-                            api_key: apiConfig.apiKey,
-                            api_secret: apiConfig.apiSecret
-                        })
+                        body: formBody.toString()
                     });
 
                     setDebugInfo(prev => [...prev, {
                         symbol: 'OAUTH',
                         status: 'INFO',
-                        message: `Token generation response status: ${response.status}`
+                        message: `Server response status: ${response.status}`
+                    }]);
+
+                    const responseText = await response.text();
+                    setDebugInfo(prev => [...prev, {
+                        symbol: 'OAUTH',
+                        status: 'INFO',
+                        message: `Server response: ${responseText.substring(0, 200)}...`
                     }]);
 
                     if (response.ok) {
-                        const data = await response.json();
+                        const data = JSON.parse(responseText);
                         
-                        setDebugInfo(prev => [...prev, {
-                            symbol: 'OAUTH',
-                            status: 'INFO',
-                            message: `Token response: ${JSON.stringify(data).substring(0, 100)}...`
-                        }]);
-
                         if (data.status === 'success' && data.data && data.data.access_token) {
                             const accessToken = data.data.access_token;
                             
@@ -200,25 +215,24 @@
                             setDebugInfo(prev => [...prev, {
                                 symbol: 'OAUTH',
                                 status: 'SUCCESS',
-                                message: `Access token generated: ${accessToken.substring(0, 10)}...`
+                                message: `✅ Access token generated successfully: ${accessToken.substring(0, 10)}...`
                             }]);
                             
                             // Clear URL parameters
                             window.history.replaceState({}, document.title, window.location.pathname);
                             
                         } else {
-                            throw new Error(data.message || 'No access token in response');
+                            throw new Error(data.message || `API returned: ${JSON.stringify(data)}`);
                         }
                     } else {
-                        const errorText = await response.text();
-                        throw new Error(`HTTP ${response.status}: ${errorText}`);
+                        throw new Error(`HTTP ${response.status}: ${responseText}`);
                     }
                 } catch (error) {
                     console.error('OAuth callback error:', error);
                     setDebugInfo(prev => [...prev, {
                         symbol: 'OAUTH',
                         status: 'ERROR',
-                        message: `OAuth error: ${error.message}`
+                        message: `❌ OAuth failed: ${error.message}`
                     }]);
                 }
             };
